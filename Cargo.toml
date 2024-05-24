@@ -1,0 +1,25 @@
+[package]
+name        = "zoc"
+version     = "0.1.0"
+edition     = "2021"
+license     = "BlueOak-1.0.0"
+description = "Z-order curve based multidimensional range search"
+repository  = "https://github.com/twittner/zoc"
+keywords    = ["z-order", "morton"]
+
+[dependencies]
+num-traits = { version = "0.2.19", default-features = false }
+
+[dev-dependencies]
+criterion  = "0.5.1"
+quickcheck = "1.0.3"
+rand       = "0.8.5"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[profile.bench]
+codegen-units = 1
+lto   = true
+strip = true

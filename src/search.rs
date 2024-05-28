@@ -1,4 +1,4 @@
-use crate::{Bbox, GetZ, Size, Z};
+use crate::{Bbox, Size, GetZ, Z};
 
 pub fn range<const D: usize, T, A>(zs: &[A], min: [T; D], max: [T; D]) -> Zrange<D, T, A>
 where

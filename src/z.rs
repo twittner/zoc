@@ -16,8 +16,8 @@ pub struct Bbox<const D: usize, T: Size<D>> {
 
 impl<const D: usize, T: Size<D>> Bbox<D, T> {
     pub fn new(min: Z<D, T>, max: Z<D, T>) -> Self {
-        let mut min_parts = [T::zero(); D];
-        let mut max_parts = [T::zero(); D];
+        let mut min_parts = [zero(); D];
+        let mut max_parts = [zero(); D];
         for (d, (min, max)) in min.deinterlace()
             .into_iter()
             .zip(max.deinterlace())
@@ -140,20 +140,16 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
 
     pub fn interlace(parts: &[T; D]) -> Self {
         let mut z = zero();
-        for i in 0 .. 8 * size_of::<T>() {
-            for (d, n) in parts.into_iter().enumerate() {
-                z = with_bit(z, i * D + d, bit(*n, i))
-            }
+        for (d, n) in parts.into_iter().enumerate() {
+            z = z | (n.expand() << d)
         }
         Self { point: z }
     }
 
     pub fn deinterlace(self) -> [T; D] {
         let mut parts = [zero(); D];
-        for i in 0 .. 8 * size_of::<T>() {
-            for (d, n) in parts.iter_mut().enumerate() {
-                *n = with_bit(*n, i, bit(self.point, i * D + d))
-            }
+        for (d, n) in parts.iter_mut().enumerate() {
+            *n = T::compress(self.point >> d)
         }
         parts
     }
@@ -211,9 +207,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Debug;
+    use std::mem::size_of;
+
+    use num_traits::zero;
     use quickcheck::{quickcheck, Arbitrary, Gen};
+    use rand::RngCore;
     use crate::Size;
 
+    use super::with_bit;
     use super::Z;
     use super::bit;
     use super::Bbox;
@@ -225,6 +227,317 @@ mod tests {
     {
         fn arbitrary(g: &mut Gen) -> Self {
             Z::new(<T as Size<D>>::Output::arbitrary(g))
+        }
+    }
+
+    fn simple_interlace<const D: usize, T: Size<D>>(parts: &[T; D]) -> Z<D, T> {
+        let mut z = zero();
+        for i in 0 .. 8 * size_of::<T>() {
+            for (d, n) in parts.into_iter().enumerate() {
+                z = with_bit(z, i * D + d, bit(*n, i))
+            }
+        }
+        Z { point: z }
+    }
+
+    fn simple_deinterlace<const D: usize, T: Size<D>>(z: Z<D, T>) -> [T; D] {
+        let mut parts = [zero(); D];
+        for i in 0 .. 8 * size_of::<T>() {
+            for (d, n) in parts.iter_mut().enumerate() {
+                *n = with_bit(*n, i, bit(z.point, i * D + d))
+            }
+        }
+        parts
+    }
+
+    quickcheck! {
+        fn interlace_u8_2(a: u8, b: u8) -> bool {
+            let x = simple_interlace(&[a, b]);
+            let y = Z::interlace(&[a, b]);
+            x == y
+        }
+
+        fn interlace_u8_3(a: u8, b: u8, c: u8) -> bool {
+            let x = simple_interlace(&[a, b, c]);
+            let y = Z::interlace(&[a, b, c]);
+            x == y
+        }
+
+        fn interlace_u8_4(a: u8, b: u8, c: u8, d: u8) -> bool {
+            let x = simple_interlace(&[a, b, c, d]);
+            let y = Z::interlace(&[a, b, c, d]);
+            x == y
+        }
+
+        fn interlace_u8_5(a: u8, b: u8, c: u8, d: u8, e: u8) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e]);
+            let y = Z::interlace(&[a, b, c, d, e]);
+            x == y
+        }
+
+        fn interlace_u8_6(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f]);
+            let y = Z::interlace(&[a, b, c, d, e, f]);
+            x == y
+        }
+
+        fn interlace_u8_7(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f, g]);
+            let y = Z::interlace(&[a, b, c, d, e, f, g]);
+            x == y
+        }
+
+        fn interlace_u8_8(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f, g, h]);
+            let y = Z::interlace(&[a, b, c, d, e, f, g, h]);
+            x == y
+        }
+
+        fn interlace_u16_2(a: u16, b: u16) -> bool {
+            let x = simple_interlace(&[a, b]);
+            let y = Z::interlace(&[a, b]);
+            x == y
+        }
+
+        fn interlace_u16_3(a: u16, b: u16, c: u16) -> bool {
+            let x = simple_interlace(&[a, b, c]);
+            let y = Z::interlace(&[a, b, c]);
+            x == y
+        }
+
+        fn interlace_u16_4(a: u16, b: u16, c: u16, d: u16) -> bool {
+            let x = simple_interlace(&[a, b, c, d]);
+            let y = Z::interlace(&[a, b, c, d]);
+            x == y
+        }
+
+        fn interlace_u16_5(a: u16, b: u16, c: u16, d: u16, e: u16) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e]);
+            let y = Z::interlace(&[a, b, c, d, e]);
+            x == y
+        }
+
+        fn interlace_u16_6(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f]);
+            let y = Z::interlace(&[a, b, c, d, e, f]);
+            x == y
+        }
+
+        fn interlace_u16_7(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f, g]);
+            let y = Z::interlace(&[a, b, c, d, e, f, g]);
+            x == y
+        }
+
+        fn interlace_u16_8(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> bool {
+            let x = simple_interlace(&[a, b, c, d, e, f, g, h]);
+            let y = Z::interlace(&[a, b, c, d, e, f, g, h]);
+            x == y
+        }
+
+        fn interlace_u32_2(a: u32, b: u32) -> bool {
+            let x = simple_interlace(&[a, b]);
+            let y = Z::interlace(&[a, b]);
+            x == y
+        }
+
+        fn interlace_u32_3(a: u32, b: u32, c: u32) -> bool {
+            let x = simple_interlace(&[a, b, c]);
+            let y = Z::interlace(&[a, b, c]);
+            x == y
+        }
+
+        fn interlace_u32_4(a: u32, b: u32, c: u32, d: u32) -> bool {
+            let x = simple_interlace(&[a, b, c, d]);
+            let y = Z::interlace(&[a, b, c, d]);
+            x == y
+        }
+
+        fn interlace_u64_2(a: u32, b: u32) -> bool {
+            let x = simple_interlace(&[a, b]);
+            let y = Z::interlace(&[a, b]);
+            x == y
+        }
+    }
+
+    fn interlace_u8<const D: usize>()
+    where
+        u8: Size<D>,
+        <u8 as Size<D>>::Output: Debug
+    {
+        let mut a = [0u8; D];
+        for _ in 0 .. 1000 {
+            rand::thread_rng().fill_bytes(&mut a);
+            let x = simple_interlace(&a);
+            let y = Z::interlace(&a);
+            assert_eq!(x, y)
+        }
+    }
+
+    #[test] fn interlace_u8_09() { interlace_u8::<9>() }
+    #[test] fn interlace_u8_10() { interlace_u8::<10>() }
+    #[test] fn interlace_u8_11() { interlace_u8::<11>() }
+    #[test] fn interlace_u8_12() { interlace_u8::<12>() }
+    #[test] fn interlace_u8_13() { interlace_u8::<13>() }
+    #[test] fn interlace_u8_14() { interlace_u8::<14>() }
+    #[test] fn interlace_u8_15() { interlace_u8::<15>() }
+    #[test] fn interlace_u8_16() { interlace_u8::<16>() }
+
+    quickcheck! {
+        fn deinterlace_u8_2(z: Z<2, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_3(z: Z<3, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_4(z: Z<4, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_5(z: Z<5, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_6(z: Z<6, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_7(z: Z<7, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_8(z: Z<8, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_9(z: Z<9, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_10(z: Z<10, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_11(z: Z<11, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_12(z: Z<12, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_13(z: Z<13, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_14(z: Z<14, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_15(z: Z<15, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u8_16(z: Z<16, u8>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_2(z: Z<2, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_3(z: Z<3, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_4(z: Z<4, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_5(z: Z<5, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_6(z: Z<6, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_7(z: Z<7, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u16_8(z: Z<8, u16>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u32_2(z: Z<2, u32>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u32_3(z: Z<3, u32>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u32_4(z: Z<4, u32>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
+        }
+
+        fn deinterlace_u64_2(z: Z<2, u64>) -> bool {
+            let x = simple_deinterlace(z);
+            let y = Z::deinterlace(z);
+            x == y
         }
     }
 
@@ -249,7 +562,9 @@ mod tests {
             }
             true
         }
+    }
 
+    quickcheck! {
         /// Assuming [b,c] and a within range, litmax is the greatest code
         /// within range that is less than a.
         fn litmax(a: Z<2, u8>, b: Z<2, u8>, c: Z<2, u8>) -> bool {

@@ -63,7 +63,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             | (F, F, F) => continue,
             | (F, F, T) => {
                 max = del_bit(max, i);
-                max = max | ones::<T>(i / D).expand() << i % D;
+                max = max | ones::<T>(i / D).expand() << (i % D);
             }
             | (F, T, F) => unreachable!("min <= max"),
             | (F, T, T) => break,
@@ -73,9 +73,9 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             }
             | (T, F, T) => {
                 litmax = del_bit(max, i);
-                litmax = litmax | ones::<T>(i / D).expand() << i % D;
+                litmax = litmax | ones::<T>(i / D).expand() << (i % D);
                 min    = set_bit(min, i);
-                min    = min & !(ones::<T>(i / D).expand() << i % D);
+                min    = min & !(ones::<T>(i / D).expand() << (i % D));
             }
             | (T, T, F) => unreachable!("min <= max"),
             | (T, T, T) => continue
@@ -95,9 +95,9 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             | (F, F, F) => continue,
             | (F, F, T) => {
                 bigmin = set_bit(min, i);
-                bigmin = bigmin & !(ones::<T>(i / D).expand() << i % D);
+                bigmin = bigmin & !(ones::<T>(i / D).expand() << (i % D));
                 max    = del_bit(max, i);
-                max    = max | ones::<T>(i / D).expand() << i % D;
+                max    = max | ones::<T>(i / D).expand() << (i % D);
             }
             | (F, T, F) => unreachable!("min <= max"),
             | (F, T, T) => {
@@ -107,7 +107,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             | (T, F, F) => break,
             | (T, F, T) => {
                 min = set_bit(min, i);
-                min = min & !(ones::<T>(i / D).expand() << i % D);
+                min = min & !(ones::<T>(i / D).expand() << (i % D));
             }
             | (T, T, F) => unreachable!("min <= max"),
             | (T, T, T) => continue
@@ -136,7 +136,7 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
 
     pub fn interlace(parts: &[T; D]) -> Self {
         let mut z = zero();
-        for (d, n) in parts.into_iter().enumerate() {
+        for (d, n) in parts.iter().enumerate() {
             z = z | (n.expand() << d)
         }
         Self { point: z }

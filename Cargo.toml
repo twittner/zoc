@@ -19,7 +19,11 @@ rand       = "0.8.5"
 name = "benchmark"
 harness = false
 
+[profile.release]
+codegen-units = 1
+lto = true
+
 [profile.bench]
 codegen-units = 1
-lto   = true
+lto = true
 strip = true

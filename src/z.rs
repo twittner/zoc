@@ -7,6 +7,7 @@ use crate::size::Size;
 const F: bool = false;
 const T: bool = true;
 
+/// A bounding box in `D` dimensions, each containing values of type `T`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bbox<const D: usize, T: Size<D>> {
     min: Z<D, T>,
@@ -16,6 +17,10 @@ pub struct Bbox<const D: usize, T: Size<D>> {
 }
 
 impl<const D: usize, T: Size<D>> Bbox<D, T> {
+    /// Create a new bounding box.
+    ///
+    /// The given arguments will be normalised such that `min` contains the
+    /// minimum values in every dimension and `max` the respective maximums.
     pub fn new(min: Z<D, T>, max: Z<D, T>) -> Self {
         let mut min_parts = [zero(); D];
         let mut max_parts = [zero(); D];
@@ -36,22 +41,30 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         }
     }
 
+    /// Borrow the bbox minimum value.
     pub fn min(&self) -> Z<D, T> {
         self.min
     }
 
+    /// Borrow the bbox maximum value.
     pub fn max(&self) -> Z<D, T> {
         self.max
     }
 
+    /// Borrow the bbox minimum values per dimension.
     pub fn min_parts(&self) -> &[T; D] {
         &self.min_parts
     }
 
+    /// Borrow the bbox maximum values per dimension.
     pub fn max_parts(&self) -> &[T; D] {
         &self.max_parts
     }
 
+    /// Calculate the little maximum value for the given argument `z`.
+    ///
+    /// If `z` is inside this bounding box, the little maximum is the greatest
+    /// point also within this bounding box that is less than `z`.
     pub fn litmax(&self, z: &Z<D, T>) -> Z<D, T> {
         let mut min = self.min.point;
         let mut max = self.max.point;
@@ -84,6 +97,10 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         Z::new(litmax)
     }
 
+    /// Calculate the big minimum value for the given argument `z`.
+    ///
+    /// If `z` is inside this bounding box, the big minimum is the smallest
+    /// point also within this bounding box that is greater than `z`.
     pub fn bigmin(&self, z: &Z<D, T>) -> Z<D, T> {
         let mut min = self.min.point;
         let mut max = self.max.point;
@@ -116,6 +133,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         Z::new(bigmin)
     }
 
+    /// Check if the given `z` is within this bounding box.
     pub fn contains(&self, z: &Z<D, T>) -> bool {
         z.deinterlace().iter()
             .zip(&self.min_parts)
@@ -124,6 +142,9 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
     }
 }
 
+/// A Z-order curve point.
+///
+/// The point consists of the interleaved bits from all dimensions.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Z<const D: usize, T: Size<D>> {
     pub point: <T as Size<D>>::Output
@@ -134,6 +155,7 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
         Self { point }
     }
 
+    /// Compute the Z-order curve point by interleaving the bits of all dimensions.
     pub fn interlace(parts: &[T; D]) -> Self {
         let mut z = zero();
         for (d, n) in parts.iter().enumerate() {
@@ -142,6 +164,7 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
         Self { point: z }
     }
 
+    /// Restore the dimensional values of this Z-order curve point.
     pub fn deinterlace(self) -> [T; D] {
         let mut parts = [zero(); D];
         for (d, n) in parts.iter_mut().enumerate() {
@@ -151,21 +174,25 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
     }
 }
 
+/// Create a bit mask with n 1s.
 #[inline]
 fn ones<T: PrimInt>(n: usize) -> T {
     (T::one() << n) - T::one()
 }
 
+/// Check if a bit is set.
 #[inline]
 fn bit<T: PrimInt>(x: T, i: usize) -> bool {
     x & (T::one() << i) != T::zero()
 }
 
+/// Set a bit at some index.
 #[inline]
 fn set_bit<T: PrimInt>(x: T, i: usize) -> T {
     x | (T::one() << i)
 }
 
+/// Clear a bit at some index.
 #[inline]
 fn del_bit<T: PrimInt>(x: T, i: usize) -> T {
     x & !(T::one() << i)
@@ -210,21 +237,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
-    use std::mem::size_of;
+    use core::fmt::Debug;
+    use core::mem::size_of;
 
     use num_traits::zero;
     use quickcheck::{quickcheck, Arbitrary, Gen};
     use rand::RngCore;
-    use crate::z::del_bit;
     use crate::Size;
-
-    use super::set_bit;
-    use super::F;
-    use super::T;
-    use super::Z;
-    use super::bit;
-    use super::Bbox;
+    use super::{bit, del_bit, set_bit, Bbox, F, T, Z};
 
     impl<const D: usize, T> Arbitrary for Z<D, T>
     where

@@ -1,10 +1,19 @@
 use num_traits::PrimInt;
 
+/// Trait to help with generic interleaving of bits.
 pub trait Size<const D: usize>: PrimInt {
+    /// The resulting type when `expand`ing `Self`.
     type Output: PrimInt;
 
+    /// Expand a value by shifting its bits.
+    ///
+    /// The original value's bits are moved to every `D`th position,
+    /// with 0s filling the gaps.
     fn expand(self) -> <Self as Size<D>>::Output;
 
+    /// The inverse of `expand`.
+    ///
+    /// The expanded bits are moved back to their original positions.
     fn compress(output: <Self as Size<D>>::Output) -> Self;
 }
 

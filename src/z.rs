@@ -1,3 +1,4 @@
+use core::cmp;
 use core::fmt;
 use core::mem::size_of;
 use num_traits::{zero, PrimInt};
@@ -55,14 +56,14 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         let mut min = self.min.point;
         let mut max = self.max.point;
         let mut litmax = max;
-        for i in (0 .. 8 * size_of::<T>() * D).rev() {
+        let start = cmp::min(z.point.leading_zeros(), cmp::min(min.leading_zeros(), max.leading_zeros()));
+        let nbits = 8 * size_of::<T>() * D;
+        for i in (0 .. nbits - start as usize).rev() {
             match (bit(z.point, i), bit(min, i), bit(max, i)) {
             | (F, F, F) => continue,
             | (F, F, T) => {
-                max = with_bit(max, i, F);
-                for j in (0 .. i).skip(i % D).step_by(D) {
-                    max = with_bit(max, j, T)
-                }
+                max = del_bit(max, i);
+                max = max | ones::<T>(i / D).expand() << i % D;
             }
             | (F, T, F) => unreachable!("min <= max"),
             | (F, T, T) => break,
@@ -71,12 +72,10 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
                 break
             }
             | (T, F, T) => {
-                litmax = with_bit(max, i, F);
-                min    = with_bit(min, i, T);
-                for j in (0 .. i).skip(i % D).step_by(D) {
-                    litmax = with_bit(litmax, j, T);
-                    min    = with_bit(min, j, F)
-                }
+                litmax = del_bit(max, i);
+                litmax = litmax | ones::<T>(i / D).expand() << i % D;
+                min    = set_bit(min, i);
+                min    = min & !(ones::<T>(i / D).expand() << i % D);
             }
             | (T, T, F) => unreachable!("min <= max"),
             | (T, T, T) => continue
@@ -89,16 +88,16 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         let mut min = self.min.point;
         let mut max = self.max.point;
         let mut bigmin = min;
-        for i in (0 .. 8 * size_of::<T>() * D).rev() {
+        let start = cmp::min(z.point.leading_zeros(), cmp::min(min.leading_zeros(), max.leading_zeros()));
+        let nbits = 8 * size_of::<T>() * D;
+        for i in (0 .. nbits - start as usize).rev() {
             match (bit(z.point, i), bit(min, i), bit(max, i)) {
             | (F, F, F) => continue,
             | (F, F, T) => {
-                bigmin = with_bit(min, i, T);
-                max    = with_bit(max, i, F);
-                for j in (0 .. i).skip(i % D).step_by(D) {
-                    bigmin = with_bit(bigmin, j, F);
-                    max    = with_bit(max, j, T)
-                }
+                bigmin = set_bit(min, i);
+                bigmin = bigmin & !(ones::<T>(i / D).expand() << i % D);
+                max    = del_bit(max, i);
+                max    = max | ones::<T>(i / D).expand() << i % D;
             }
             | (F, T, F) => unreachable!("min <= max"),
             | (F, T, T) => {
@@ -107,10 +106,8 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             }
             | (T, F, F) => break,
             | (T, F, T) => {
-                min = with_bit(min, i, T);
-                for j in (0 .. i).skip(i % D).step_by(D) {
-                    min = with_bit(min, j, F)
-                }
+                min = set_bit(min, i);
+                min = min & !(ones::<T>(i / D).expand() << i % D);
             }
             | (T, T, F) => unreachable!("min <= max"),
             | (T, T, T) => continue
@@ -126,7 +123,6 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
             .all(|((z, min), max)| min <= z && z <= max)
     }
 }
-
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Z<const D: usize, T: Size<D>> {
@@ -156,16 +152,23 @@ impl<const D: usize, T: Size<D>> Z<D, T> {
 }
 
 #[inline]
+fn ones<T: PrimInt>(n: usize) -> T {
+    (T::one() << n) - T::one()
+}
+
+#[inline]
 fn bit<T: PrimInt>(x: T, i: usize) -> bool {
     x & (T::one() << i) != T::zero()
 }
 
 #[inline]
-fn with_bit<T: PrimInt>(x: T, i: usize, b: bool) -> T {
-    match b {
-    | true  => x |  (T::one() << i),
-    | false => x & !(T::one() << i)
-    }
+fn set_bit<T: PrimInt>(x: T, i: usize) -> T {
+    x | (T::one() << i)
+}
+
+#[inline]
+fn del_bit<T: PrimInt>(x: T, i: usize) -> T {
+    x & !(T::one() << i)
 }
 
 impl<const D: usize, T: Size<D>> From<[T; D]> for Z<D, T> {
@@ -213,9 +216,12 @@ mod tests {
     use num_traits::zero;
     use quickcheck::{quickcheck, Arbitrary, Gen};
     use rand::RngCore;
+    use crate::z::del_bit;
     use crate::Size;
 
-    use super::with_bit;
+    use super::set_bit;
+    use super::F;
+    use super::T;
     use super::Z;
     use super::bit;
     use super::Bbox;
@@ -234,8 +240,11 @@ mod tests {
         let mut z = zero();
         for i in 0 .. 8 * size_of::<T>() {
             for (d, n) in parts.into_iter().enumerate() {
-                z = with_bit(z, i * D + d, bit(*n, i))
-            }
+                z = match bit(*n, i) {
+                    F => del_bit(z, i * D + d),
+                    T => set_bit(z, i * D + d)
+                }
+            };
         }
         Z { point: z }
     }
@@ -244,7 +253,10 @@ mod tests {
         let mut parts = [zero(); D];
         for i in 0 .. 8 * size_of::<T>() {
             for (d, n) in parts.iter_mut().enumerate() {
-                *n = with_bit(*n, i, bit(z.point, i * D + d))
+                *n = match bit(z.point, i * D + d) {
+                    F => del_bit(*n, i),
+                    T => set_bit(*n, i)
+                }
             }
         }
         parts
@@ -567,7 +579,7 @@ mod tests {
     quickcheck! {
         /// Assuming [b,c] and a within range, litmax is the greatest code
         /// within range that is less than a.
-        fn litmax(a: Z<2, u8>, b: Z<2, u8>, c: Z<2, u8>) -> bool {
+        fn litmax(a: Z<2, u32>, b: Z<2, u32>, c: Z<2, u32>) -> bool {
             let bbox = Bbox::new(b, c);
             let lmx = bbox.litmax(&a);
             if a > bbox.min && a <= bbox.max {
@@ -579,13 +591,13 @@ mod tests {
 
         /// Assuming [b,c] and a within range, bigmin is the smallest code
         /// within range that is greater than a.
-        fn bigmin(a: Z<2, u8>, b: Z<2, u8>, c: Z<2, u8>) -> bool {
+        fn bigmin(a: Z<2, u32>, b: Z<2, u32>, c: Z<2, u32>) -> bool {
             let bbox = Bbox::new(b, c);
-            let lmx = bbox.bigmin(&a);
+            let bmi = bbox.bigmin(&a);
             if a >= bbox.min && a < bbox.max {
-                lmx > a && lmx >= bbox.min && lmx <= bbox.max
+                bmi > a && bmi >= bbox.min && bmi <= bbox.max
             } else {
-                lmx >= bbox.min && lmx <= bbox.max
+                bmi >= bbox.min && bmi <= bbox.max
             }
         }
     }

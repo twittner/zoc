@@ -234,6 +234,63 @@ where
     }
 }
 
+#[cfg(feature = "minicbor")]
+use minicbor::encode::{self, Encode, Encoder, Write};
+#[cfg(feature = "minicbor")]
+use minicbor::decode::{self, Decode, Decoder};
+
+#[cfg(feature = "minicbor")]
+impl<const D: usize, T: Size<D>, C> Encode<C> for Z<D, T>
+where
+    <T as Size<D>>::Output: Encode<C>
+{
+    fn encode<W>(&self, e: &mut Encoder<W>, ctx: &mut C) -> Result<(), encode::Error<W::Error>>
+    where
+        W: Write
+    {
+        self.point.encode(e, ctx)
+    }
+}
+
+#[cfg(feature = "minicbor")]
+impl<'b, const D: usize, T: Size<D>, C> Decode<'b, C> for Z<D, T>
+where
+    <T as Size<D>>::Output: Decode<'b, C>
+{
+    fn decode(d: &mut Decoder<'b>, ctx: &mut C) -> Result<Self, decode::Error> {
+        Ok(Z {
+            point: <T as Size<D>>::Output::decode(d, ctx)?
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+use serde::ser::{Serialize, Serializer};
+#[cfg(feature = "serde")]
+use serde::de::{Deserialize, Deserializer};
+
+#[cfg(feature = "serde")]
+impl<const D: usize, T: Size<D>> Serialize for Z<D, T>
+where
+    <T as Size<D>>::Output: Serialize
+{
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.point.serialize(s)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const D: usize, T: Size<D>> Deserialize<'de> for Z<D, T>
+where
+    <T as Size<D>>::Output: Deserialize<'de>
+{
+    fn deserialize<S: Deserializer<'de>>(d: S) -> Result<Self, S::Error> {
+        Ok(Z {
+            point: <T as Size<D>>::Output::deserialize(d)?
+        })
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

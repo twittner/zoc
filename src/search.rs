@@ -34,16 +34,16 @@ where
         while let Some(frame) = self.stack.pop() {
             match frame.zs.split_at(frame.zs.len() / 2) {
             | (lower, [mid, upper @ ..]) => {
-                if mid.z() < frame.min {
+                let midz = *mid.z();
+                if midz < frame.min {
                     if !upper.is_empty() {
                         self.stack.push(Frame { zs: upper, min: frame.min, max: frame.max })
                     }
-                } else if mid.z() > frame.max {
+                } else if midz > frame.max {
                     if !lower.is_empty() {
                         self.stack.push(Frame { zs: lower, min: frame.min, max: frame.max })
                     }
                 } else {
-                    let midz = mid.z();
                     if self.bbox.contains(&midz) {
                         if !upper.is_empty() {
                             self.stack.push(Frame { zs: upper, min: midz, max: frame.max })

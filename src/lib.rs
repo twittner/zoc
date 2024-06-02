@@ -18,11 +18,11 @@ pub use size::Size;
 
 /// A type that has a [`Z`] value.
 pub trait GetZ<const D: usize, T: Size<D>> {
-    fn z(&self) -> Z<D, T>;
+    fn z(&self) -> &Z<D, T>;
 }
 
 impl<const D: usize, T: Size<D>> GetZ<D, T> for Z<D, T> {
-    fn z(&self) -> Z<D, T> {
-        *self
+    fn z(&self) -> &Z<D, T> {
+        self
     }
 }

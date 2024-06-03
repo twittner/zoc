@@ -4,22 +4,42 @@ use crate::{Bbox, Size, GetZ, Z};
 ///
 /// Out of a sequence of values that are sorted by their `Z` value, get all
 /// elements within a bounding box.
-pub fn range<const D: usize, T, A>(zs: &[A], min: [T; D], max: [T; D]) -> Zrange<D, T, A>
+pub fn range<const D: usize, T, A>(items: &[A], min: [T; D], max: [T; D]) -> Zrange<D, T, A>
 where
     T: Size<D>,
     A: GetZ<D, T>
 {
     let bbox = Bbox::new(min.into(), max.into());
-    Zrange { stack: vec![Frame { zs, min: bbox.min(), max: bbox.max() }], bbox }
+    Zrange {
+        stack: vec![Frame { items, min: bbox.min(), max: bbox.max() }],
+        bbox,
+        optimise: true
+    }
 }
 
+/// Iterator over `Z` values.
 pub struct Zrange<'a, const D: usize, T: Size<D>, A> {
     stack: Vec<Frame<'a, D, T, A>>,
-    bbox: Bbox<D, T>
+    bbox: Bbox<D, T>,
+    optimise: bool
+}
+
+impl<'a, const D: usize, T: Size<D>, A: GetZ<D, T>> Zrange<'a, D, T, A> {
+    /// Enable litmax/bigmin optimization (default).
+    pub fn optimized(self) -> Self {
+        Self { optimise: true, .. self }
+    }
+
+    /// Disable litmax/bigmin optimization.
+    ///
+    /// Reverts to binary search.
+    pub fn unoptimized(self) -> Self {
+        Self { optimise: false, .. self }
+    }
 }
 
 struct Frame<'a, const D: usize, T: Size<D>, A> {
-    zs: &'a [A],
+    items: &'a [A],
     min: Z<D, T>,
     max: Z<D, T>
 }
@@ -32,34 +52,41 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(frame) = self.stack.pop() {
-            match frame.zs.split_at(frame.zs.len() / 2) {
+            match frame.items.split_at(frame.items.len() / 2) {
             | (lower, [mid, upper @ ..]) => {
                 let midz = *mid.z();
                 if midz < frame.min {
                     if !upper.is_empty() {
-                        self.stack.push(Frame { zs: upper, min: frame.min, max: frame.max })
+                        self.stack.push(Frame { items: upper, min: frame.min, max: frame.max })
                     }
                 } else if midz > frame.max {
                     if !lower.is_empty() {
-                        self.stack.push(Frame { zs: lower, min: frame.min, max: frame.max })
+                        self.stack.push(Frame { items: lower, min: frame.min, max: frame.max })
                     }
                 } else {
                     if self.bbox.contains(&midz) {
                         if !upper.is_empty() {
-                            self.stack.push(Frame { zs: upper, min: midz, max: frame.max })
+                            self.stack.push(Frame { items: upper, min: midz, max: frame.max })
                         }
                         if !lower.is_empty() {
-                            self.stack.push(Frame { zs: lower, min: frame.min, max: midz })
+                            self.stack.push(Frame { items: lower, min: frame.min, max: midz })
                         }
                         return Some(mid)
-                    } else {
+                    } else if self.optimise {
                         if !upper.is_empty() {
                             let bigmin = self.bbox.bigmin(&midz);
-                            self.stack.push(Frame { zs: upper, min: bigmin, max: frame.max })
+                            self.stack.push(Frame { items: upper, min: bigmin, max: frame.max })
                         }
                         if !lower.is_empty() {
                             let litmax = self.bbox.litmax(&midz);
-                            self.stack.push(Frame { zs: lower, min: frame.min, max: litmax })
+                            self.stack.push(Frame { items: lower, min: frame.min, max: litmax })
+                        }
+                    } else {
+                        if !upper.is_empty() {
+                            self.stack.push(Frame { items: upper, min: midz, max: frame.max })
+                        }
+                        if !lower.is_empty() {
+                            self.stack.push(Frame { items: lower, min: frame.min, max: midz })
                         }
                     }
                 }

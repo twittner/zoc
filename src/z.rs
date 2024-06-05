@@ -7,7 +7,7 @@ use crate::size::Size;
 const F: bool = false;
 const T: bool = true;
 
-/// A bounding box in `D` dimensions, each containing values of type `T`.
+/// A bounding box in `D` dimensions, each containing a value of type `T`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bbox<const D: usize, T: Size<D>> {
     min: Z<D, T>,
@@ -20,7 +20,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
     /// Create a new bounding box.
     ///
     /// The given arguments will be normalised such that `min` contains the
-    /// minimum values in every dimension and `max` the respective maximums.
+    /// minimum value in every dimension and `max` the respective maximums.
     pub fn new(min: Z<D, T>, max: Z<D, T>) -> Self {
         let mut min_parts = [zero(); D];
         let mut max_parts = [zero(); D];
@@ -41,22 +41,22 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         }
     }
 
-    /// Borrow the bbox minimum value.
+    /// Borrow the bbox minimum z-order curve point.
     pub fn min(&self) -> Z<D, T> {
         self.min
     }
 
-    /// Borrow the bbox maximum value.
+    /// Borrow the bbox maximum z-order curve point.
     pub fn max(&self) -> Z<D, T> {
         self.max
     }
 
-    /// Borrow the bbox minimum values per dimension.
+    /// Borrow the bbox minimum values.
     pub fn min_parts(&self) -> &[T; D] {
         &self.min_parts
     }
 
-    /// Borrow the bbox maximum values per dimension.
+    /// Borrow the bbox maximum values.
     pub fn max_parts(&self) -> &[T; D] {
         &self.max_parts
     }

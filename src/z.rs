@@ -7,7 +7,7 @@ use crate::size::Size;
 const F: bool = false;
 const T: bool = true;
 
-/// A bounding box in `D` dimensions, each containing values of type `T`.
+/// A bounding box in `D` dimensions, each containing a value of type `T`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bbox<const D: usize, T: Size<D>> {
     min: Z<D, T>,
@@ -20,7 +20,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
     /// Create a new bounding box.
     ///
     /// The given arguments will be normalised such that `min` contains the
-    /// minimum values in every dimension and `max` the respective maximums.
+    /// minimum value in every dimension and `max` the respective maximums.
     pub fn new(min: Z<D, T>, max: Z<D, T>) -> Self {
         let mut min_parts = [zero(); D];
         let mut max_parts = [zero(); D];
@@ -41,22 +41,22 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         }
     }
 
-    /// Borrow the bbox minimum value.
+    /// Borrow the bbox minimum z-order curve point.
     pub fn min(&self) -> Z<D, T> {
         self.min
     }
 
-    /// Borrow the bbox maximum value.
+    /// Borrow the bbox maximum z-order curve point.
     pub fn max(&self) -> Z<D, T> {
         self.max
     }
 
-    /// Borrow the bbox minimum values per dimension.
+    /// Borrow the bbox minimum values.
     pub fn min_parts(&self) -> &[T; D] {
         &self.min_parts
     }
 
-    /// Borrow the bbox maximum values per dimension.
+    /// Borrow the bbox maximum values.
     pub fn max_parts(&self) -> &[T; D] {
         &self.max_parts
     }
@@ -70,7 +70,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         let mut max = self.max.point;
         let mut litmax = max;
         let start = cmp::min(z.point.leading_zeros(), cmp::min(min.leading_zeros(), max.leading_zeros()));
-        let nbits = 8 * size_of::<T>() * D;
+        let nbits = 8 * size_of::<T>() * D.next_power_of_two();
         for i in (0 .. nbits - start as usize).rev() {
             match (bit(z.point, i), bit(min, i), bit(max, i)) {
             | (F, F, F) => continue,
@@ -106,7 +106,7 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         let mut max = self.max.point;
         let mut bigmin = min;
         let start = cmp::min(z.point.leading_zeros(), cmp::min(min.leading_zeros(), max.leading_zeros()));
-        let nbits = 8 * size_of::<T>() * D;
+        let nbits = 8 * size_of::<T>() * D.next_power_of_two();
         for i in (0 .. nbits - start as usize).rev() {
             match (bit(z.point, i), bit(min, i), bit(max, i)) {
             | (F, F, F) => continue,
@@ -294,22 +294,30 @@ where
 
 #[cfg(test)]
 mod tests {
-    use core::fmt::Debug;
+    use arbitrary::{Arbitrary, Unstructured};
     use core::mem::size_of;
-
     use num_traits::zero;
-    use quickcheck::{quickcheck, Arbitrary, Gen};
     use rand::RngCore;
     use crate::Size;
     use super::{bit, del_bit, set_bit, Bbox, F, T, Z};
 
-    impl<const D: usize, T> Arbitrary for Z<D, T>
+    fn assert<T: for<'a> Arbitrary<'a>>(label: &str, prop: impl Fn(T) -> bool) {
+        let mut data = vec![0u8; size_of::<T>()];
+        for _ in 0 .. 10_000 {
+            let mut u = Unstructured::new(&data);
+            let n = u.arbitrary().unwrap();
+            assert!(prop(n), "{label}");
+            rand::thread_rng().fill_bytes(&mut data)
+        }
+    }
+
+    impl<const D: usize, T> Arbitrary<'_> for Z<D, T>
     where
         T: Size<D> + 'static,
-        <T as Size<D>>::Output: Arbitrary
+        <T as Size<D>>::Output: for<'a> Arbitrary<'a>
     {
-        fn arbitrary(g: &mut Gen) -> Self {
-            Z::new(<T as Size<D>>::Output::arbitrary(g))
+        fn arbitrary(u: &mut Unstructured) -> Result<Self, arbitrary::Error> {
+            Ok(Z::new(<T as Size<D>>::Output::arbitrary(u)?))
         }
     }
 
@@ -339,304 +347,138 @@ mod tests {
         parts
     }
 
-    quickcheck! {
-        fn interlace_u8_2(a: u8, b: u8) -> bool {
-            let x = simple_interlace(&[a, b]);
-            let y = Z::interlace(&[a, b]);
-            x == y
+    #[test]
+    fn interlace() {
+        fn assert_interlace<const D: usize, T: Size<D>>(label: &str)
+        where
+            T: for<'a> Arbitrary<'a>
+        {
+            assert(label, |parts: [T; D]| {
+                let x = simple_interlace(&parts);
+                let y = Z::interlace(&parts);
+                x == y
+            })
         }
 
-        fn interlace_u8_3(a: u8, b: u8, c: u8) -> bool {
-            let x = simple_interlace(&[a, b, c]);
-            let y = Z::interlace(&[a, b, c]);
-            x == y
-        }
+        assert_interlace::<2,  u8>("D := 2,  T := u8");
+        assert_interlace::<3,  u8>("D := 3,  T := u8");
+        assert_interlace::<4,  u8>("D := 4,  T := u8");
+        assert_interlace::<5,  u8>("D := 5,  T := u8");
+        assert_interlace::<6,  u8>("D := 6,  T := u8");
+        assert_interlace::<7,  u8>("D := 7,  T := u8");
+        assert_interlace::<8,  u8>("D := 8,  T := u8");
+        assert_interlace::<9,  u8>("D := 9,  T := u8");
+        assert_interlace::<11, u8>("D := 11, T := u8");
+        assert_interlace::<12, u8>("D := 12, T := u8");
+        assert_interlace::<13, u8>("D := 13, T := u8");
+        assert_interlace::<14, u8>("D := 14, T := u8");
+        assert_interlace::<15, u8>("D := 15, T := u8");
+        assert_interlace::<16, u8>("D := 16, T := u8");
 
-        fn interlace_u8_4(a: u8, b: u8, c: u8, d: u8) -> bool {
-            let x = simple_interlace(&[a, b, c, d]);
-            let y = Z::interlace(&[a, b, c, d]);
-            x == y
-        }
+        assert_interlace::<2, u16>("D := 2, T := u16");
+        assert_interlace::<3, u16>("D := 3, T := u16");
+        assert_interlace::<4, u16>("D := 4, T := u16");
+        assert_interlace::<5, u16>("D := 5, T := u16");
+        assert_interlace::<6, u16>("D := 6, T := u16");
+        assert_interlace::<7, u16>("D := 7, T := u16");
+        assert_interlace::<8, u16>("D := 8, T := u16");
 
-        fn interlace_u8_5(a: u8, b: u8, c: u8, d: u8, e: u8) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e]);
-            let y = Z::interlace(&[a, b, c, d, e]);
-            x == y
-        }
+        assert_interlace::<2, u32>("D := 2, T := u32");
+        assert_interlace::<3, u32>("D := 3, T := u32");
+        assert_interlace::<4, u32>("D := 4, T := u32");
 
-        fn interlace_u8_6(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f]);
-            let y = Z::interlace(&[a, b, c, d, e, f]);
-            x == y
-        }
-
-        fn interlace_u8_7(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f, g]);
-            let y = Z::interlace(&[a, b, c, d, e, f, g]);
-            x == y
-        }
-
-        fn interlace_u8_8(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f, g, h]);
-            let y = Z::interlace(&[a, b, c, d, e, f, g, h]);
-            x == y
-        }
-
-        fn interlace_u16_2(a: u16, b: u16) -> bool {
-            let x = simple_interlace(&[a, b]);
-            let y = Z::interlace(&[a, b]);
-            x == y
-        }
-
-        fn interlace_u16_3(a: u16, b: u16, c: u16) -> bool {
-            let x = simple_interlace(&[a, b, c]);
-            let y = Z::interlace(&[a, b, c]);
-            x == y
-        }
-
-        fn interlace_u16_4(a: u16, b: u16, c: u16, d: u16) -> bool {
-            let x = simple_interlace(&[a, b, c, d]);
-            let y = Z::interlace(&[a, b, c, d]);
-            x == y
-        }
-
-        fn interlace_u16_5(a: u16, b: u16, c: u16, d: u16, e: u16) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e]);
-            let y = Z::interlace(&[a, b, c, d, e]);
-            x == y
-        }
-
-        fn interlace_u16_6(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f]);
-            let y = Z::interlace(&[a, b, c, d, e, f]);
-            x == y
-        }
-
-        fn interlace_u16_7(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f, g]);
-            let y = Z::interlace(&[a, b, c, d, e, f, g]);
-            x == y
-        }
-
-        fn interlace_u16_8(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> bool {
-            let x = simple_interlace(&[a, b, c, d, e, f, g, h]);
-            let y = Z::interlace(&[a, b, c, d, e, f, g, h]);
-            x == y
-        }
-
-        fn interlace_u32_2(a: u32, b: u32) -> bool {
-            let x = simple_interlace(&[a, b]);
-            let y = Z::interlace(&[a, b]);
-            x == y
-        }
-
-        fn interlace_u32_3(a: u32, b: u32, c: u32) -> bool {
-            let x = simple_interlace(&[a, b, c]);
-            let y = Z::interlace(&[a, b, c]);
-            x == y
-        }
-
-        fn interlace_u32_4(a: u32, b: u32, c: u32, d: u32) -> bool {
-            let x = simple_interlace(&[a, b, c, d]);
-            let y = Z::interlace(&[a, b, c, d]);
-            x == y
-        }
-
-        fn interlace_u64_2(a: u32, b: u32) -> bool {
-            let x = simple_interlace(&[a, b]);
-            let y = Z::interlace(&[a, b]);
-            x == y
-        }
+        assert_interlace::<2, u64>("D := 2, T := u64")
     }
 
-    fn interlace_u8<const D: usize>()
-    where
-        u8: Size<D>,
-        <u8 as Size<D>>::Output: Debug
-    {
-        let mut a = [0u8; D];
-        for _ in 0 .. 1000 {
-            rand::thread_rng().fill_bytes(&mut a);
-            let x = simple_interlace(&a);
-            let y = Z::interlace(&a);
-            assert_eq!(x, y)
+    #[test]
+    fn deinterlace() {
+        fn assert_deinterlace<const D: usize, T: Size<D>>(label: &str)
+        where
+            T: 'static,
+            <T as Size<D>>::Output: for<'a> Arbitrary<'a>
+        {
+            assert(label, |z: Z<D, T>| {
+                let x = simple_deinterlace(z);
+                let y = Z::deinterlace(z);
+                x == y
+            })
         }
+
+        assert_deinterlace::<2,  u8>("D := 2,  T := u8");
+        assert_deinterlace::<3,  u8>("D := 3,  T := u8");
+        assert_deinterlace::<4,  u8>("D := 4,  T := u8");
+        assert_deinterlace::<5,  u8>("D := 5,  T := u8");
+        assert_deinterlace::<6,  u8>("D := 6,  T := u8");
+        assert_deinterlace::<7,  u8>("D := 7,  T := u8");
+        assert_deinterlace::<8,  u8>("D := 8,  T := u8");
+        assert_deinterlace::<9,  u8>("D := 9,  T := u8");
+        assert_deinterlace::<11, u8>("D := 11, T := u8");
+        assert_deinterlace::<12, u8>("D := 12, T := u8");
+        assert_deinterlace::<13, u8>("D := 13, T := u8");
+        assert_deinterlace::<14, u8>("D := 14, T := u8");
+        assert_deinterlace::<15, u8>("D := 15, T := u8");
+        assert_deinterlace::<16, u8>("D := 16, T := u8");
+
+        assert_deinterlace::<2, u16>("D := 2, T := u16");
+        assert_deinterlace::<3, u16>("D := 3, T := u16");
+        assert_deinterlace::<4, u16>("D := 4, T := u16");
+        assert_deinterlace::<5, u16>("D := 5, T := u16");
+        assert_deinterlace::<6, u16>("D := 6, T := u16");
+        assert_deinterlace::<7, u16>("D := 7, T := u16");
+        assert_deinterlace::<8, u16>("D := 8, T := u16");
+
+        assert_deinterlace::<2, u32>("D := 2, T := u32");
+        assert_deinterlace::<3, u32>("D := 3, T := u32");
+        assert_deinterlace::<4, u32>("D := 4, T := u32");
+
+        assert_deinterlace::<2, u64>("D := 2, T := u64")
     }
 
-    #[test] fn interlace_u8_09() { interlace_u8::<9>() }
-    #[test] fn interlace_u8_10() { interlace_u8::<10>() }
-    #[test] fn interlace_u8_11() { interlace_u8::<11>() }
-    #[test] fn interlace_u8_12() { interlace_u8::<12>() }
-    #[test] fn interlace_u8_13() { interlace_u8::<13>() }
-    #[test] fn interlace_u8_14() { interlace_u8::<14>() }
-    #[test] fn interlace_u8_15() { interlace_u8::<15>() }
-    #[test] fn interlace_u8_16() { interlace_u8::<16>() }
-
-    quickcheck! {
-        fn deinterlace_u8_2(z: Z<2, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
+    #[test]
+    fn interlace_deinterlace_identity() {
+        fn assert_identity<const D: usize, T: Size<D>>(label: &str)
+        where
+            T: for<'a> Arbitrary<'a>
+        {
+            assert(label, |parts1: [T; D]| {
+                let parts2 = Z::interlace(&parts1).deinterlace();
+                parts1 == parts2
+            })
         }
 
-        fn deinterlace_u8_3(z: Z<3, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
+        assert_identity::<2,  u8>("D := 2,  T := u8");
+        assert_identity::<3,  u8>("D := 3,  T := u8");
+        assert_identity::<4,  u8>("D := 4,  T := u8");
+        assert_identity::<5,  u8>("D := 5,  T := u8");
+        assert_identity::<6,  u8>("D := 6,  T := u8");
+        assert_identity::<7,  u8>("D := 7,  T := u8");
+        assert_identity::<8,  u8>("D := 8,  T := u8");
+        assert_identity::<9,  u8>("D := 9,  T := u8");
+        assert_identity::<11, u8>("D := 11, T := u8");
+        assert_identity::<12, u8>("D := 12, T := u8");
+        assert_identity::<13, u8>("D := 13, T := u8");
+        assert_identity::<14, u8>("D := 14, T := u8");
+        assert_identity::<15, u8>("D := 15, T := u8");
+        assert_identity::<16, u8>("D := 16, T := u8");
 
-        fn deinterlace_u8_4(z: Z<4, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
+        assert_identity::<2, u16>("D := 2, T := u16");
+        assert_identity::<3, u16>("D := 3, T := u16");
+        assert_identity::<4, u16>("D := 4, T := u16");
+        assert_identity::<5, u16>("D := 5, T := u16");
+        assert_identity::<6, u16>("D := 6, T := u16");
+        assert_identity::<7, u16>("D := 7, T := u16");
+        assert_identity::<8, u16>("D := 8, T := u16");
 
-        fn deinterlace_u8_5(z: Z<5, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
+        assert_identity::<2, u32>("D := 2, T := u32");
+        assert_identity::<3, u32>("D := 3, T := u32");
+        assert_identity::<4, u32>("D := 4, T := u32");
 
-        fn deinterlace_u8_6(z: Z<6, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_7(z: Z<7, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_8(z: Z<8, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_9(z: Z<9, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_10(z: Z<10, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_11(z: Z<11, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_12(z: Z<12, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_13(z: Z<13, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_14(z: Z<14, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_15(z: Z<15, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u8_16(z: Z<16, u8>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_2(z: Z<2, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_3(z: Z<3, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_4(z: Z<4, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_5(z: Z<5, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_6(z: Z<6, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_7(z: Z<7, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u16_8(z: Z<8, u16>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u32_2(z: Z<2, u32>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u32_3(z: Z<3, u32>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u32_4(z: Z<4, u32>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
-
-        fn deinterlace_u64_2(z: Z<2, u64>) -> bool {
-            let x = simple_deinterlace(z);
-            let y = Z::deinterlace(z);
-            x == y
-        }
+        assert_identity::<2, u64>("D := 2, T := u64")
     }
 
-    quickcheck! {
-        fn from_parts_to_parts(x1: u32, y1: u32) -> bool {
-            let [x2, y2] = Z::interlace(&[x1, y1]).deinterlace();
-            x1 == x2 && y1 == y2
-        }
-
-        fn from_parts(x: u32, y: u32, z: u32) -> bool {
+    #[test]
+    fn from_parts() {
+        assert("from_parts", |(x, y, z): (u32, u32, u32)| {
             let val = Z::interlace(&[x, y, z]);
             for i in 0 .. 32 {
                 if bit(val.point, i * 3) != bit(x, i) {
@@ -650,32 +492,103 @@ mod tests {
                 }
             }
             true
-        }
+        })
     }
 
-    quickcheck! {
-        /// Assuming [b,c] and a within range, litmax is the greatest code
-        /// within range that is less than a.
-        fn litmax(a: Z<2, u32>, b: Z<2, u32>, c: Z<2, u32>) -> bool {
-            let bbox = Bbox::new(b, c);
-            let lmx = bbox.litmax(&a);
-            if a > bbox.min && a <= bbox.max {
-                lmx < a && lmx >= bbox.min && lmx <= bbox.max
-            } else {
-                lmx >= bbox.min && lmx <= bbox.max
-            }
+    #[test]
+    fn litmax() {
+        fn assert_litmax<const D: usize, T: Size<D>>(label: &str)
+        where
+            T: 'static,
+            <T as Size<D>>::Output: for<'a> Arbitrary<'a>
+        {
+            assert(label, |(a, b, c): (Z<D, T>, Z<D, T>, Z<D, T>)| {
+                let bbox = Bbox::new(b, c);
+                let lmx = bbox.litmax(&a);
+                if a > bbox.min && a <= bbox.max {
+                    lmx < a && lmx >= bbox.min && lmx <= bbox.max
+                } else {
+                    lmx >= bbox.min && lmx <= bbox.max
+                }
+            })
         }
 
-        /// Assuming [b,c] and a within range, bigmin is the smallest code
-        /// within range that is greater than a.
-        fn bigmin(a: Z<2, u32>, b: Z<2, u32>, c: Z<2, u32>) -> bool {
-            let bbox = Bbox::new(b, c);
-            let bmi = bbox.bigmin(&a);
-            if a >= bbox.min && a < bbox.max {
-                bmi > a && bmi >= bbox.min && bmi <= bbox.max
-            } else {
-                bmi >= bbox.min && bmi <= bbox.max
-            }
+        assert_litmax::<2,  u8>("D := 2,  T := u8");
+        assert_litmax::<3,  u8>("D := 3,  T := u8");
+        assert_litmax::<4,  u8>("D := 4,  T := u8");
+        assert_litmax::<5,  u8>("D := 5,  T := u8");
+        assert_litmax::<6,  u8>("D := 6,  T := u8");
+        assert_litmax::<7,  u8>("D := 7,  T := u8");
+        assert_litmax::<8,  u8>("D := 8,  T := u8");
+        assert_litmax::<9,  u8>("D := 9,  T := u8");
+        assert_litmax::<11, u8>("D := 11, T := u8");
+        assert_litmax::<12, u8>("D := 12, T := u8");
+        assert_litmax::<13, u8>("D := 13, T := u8");
+        assert_litmax::<14, u8>("D := 14, T := u8");
+        assert_litmax::<15, u8>("D := 15, T := u8");
+        assert_litmax::<16, u8>("D := 16, T := u8");
+
+        assert_litmax::<2, u16>("D := 2, T := u16");
+        assert_litmax::<3, u16>("D := 3, T := u16");
+        assert_litmax::<4, u16>("D := 4, T := u16");
+        assert_litmax::<5, u16>("D := 5, T := u16");
+        assert_litmax::<6, u16>("D := 6, T := u16");
+        assert_litmax::<7, u16>("D := 7, T := u16");
+        assert_litmax::<8, u16>("D := 8, T := u16");
+
+        assert_litmax::<2, u32>("D := 2, T := u32");
+        assert_litmax::<3, u32>("D := 3, T := u32");
+        assert_litmax::<4, u32>("D := 4, T := u32");
+
+        assert_litmax::<2, u64>("D := 2, T := u64")
+
+    }
+
+    #[test]
+    fn bigmin() {
+        fn assert_bigmin<const D: usize, T: Size<D>>(label: &str)
+        where
+            T: 'static,
+            <T as Size<D>>::Output: for<'a> Arbitrary<'a>
+        {
+            assert(label, |(a, b, c): (Z<D, T>, Z<D, T>, Z<D, T>)| {
+                let bbox = Bbox::new(b, c);
+                let bmi = bbox.bigmin(&a);
+                if a >= bbox.min && a < bbox.max {
+                    bmi > a && bmi >= bbox.min && bmi <= bbox.max
+                } else {
+                    bmi >= bbox.min && bmi <= bbox.max
+                }
+            })
         }
+
+        assert_bigmin::<2,  u8>("D := 2,  T := u8");
+        assert_bigmin::<3,  u8>("D := 3,  T := u8");
+        assert_bigmin::<4,  u8>("D := 4,  T := u8");
+        assert_bigmin::<5,  u8>("D := 5,  T := u8");
+        assert_bigmin::<6,  u8>("D := 6,  T := u8");
+        assert_bigmin::<7,  u8>("D := 7,  T := u8");
+        assert_bigmin::<8,  u8>("D := 8,  T := u8");
+        assert_bigmin::<9,  u8>("D := 9,  T := u8");
+        assert_bigmin::<11, u8>("D := 11, T := u8");
+        assert_bigmin::<12, u8>("D := 12, T := u8");
+        assert_bigmin::<13, u8>("D := 13, T := u8");
+        assert_bigmin::<14, u8>("D := 14, T := u8");
+        assert_bigmin::<15, u8>("D := 15, T := u8");
+        assert_bigmin::<16, u8>("D := 16, T := u8");
+
+        assert_bigmin::<2, u16>("D := 2, T := u16");
+        assert_bigmin::<3, u16>("D := 3, T := u16");
+        assert_bigmin::<4, u16>("D := 4, T := u16");
+        assert_bigmin::<5, u16>("D := 5, T := u16");
+        assert_bigmin::<6, u16>("D := 6, T := u16");
+        assert_bigmin::<7, u16>("D := 7, T := u16");
+        assert_bigmin::<8, u16>("D := 8, T := u16");
+
+        assert_bigmin::<2, u32>("D := 2, T := u32");
+        assert_bigmin::<3, u32>("D := 3, T := u32");
+        assert_bigmin::<4, u32>("D := 4, T := u32");
+
+        assert_bigmin::<2, u64>("D := 2, T := u64")
     }
 }

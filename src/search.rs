@@ -63,31 +63,29 @@ where
                     if !lower.is_empty() {
                         self.stack.push(Frame { items: lower, min: frame.min, max: frame.max })
                     }
+                } else if self.bbox.contains(&midz) {
+                    if !upper.is_empty() {
+                        self.stack.push(Frame { items: upper, min: midz, max: frame.max })
+                    }
+                    if !lower.is_empty() {
+                        self.stack.push(Frame { items: lower, min: frame.min, max: midz })
+                    }
+                    return Some(mid)
+                } else if self.optimise {
+                    if !upper.is_empty() {
+                        let bigmin = self.bbox.bigmin(&midz);
+                        self.stack.push(Frame { items: upper, min: bigmin, max: frame.max })
+                    }
+                    if !lower.is_empty() {
+                        let litmax = self.bbox.litmax(&midz);
+                        self.stack.push(Frame { items: lower, min: frame.min, max: litmax })
+                    }
                 } else {
-                    if self.bbox.contains(&midz) {
-                        if !upper.is_empty() {
-                            self.stack.push(Frame { items: upper, min: midz, max: frame.max })
-                        }
-                        if !lower.is_empty() {
-                            self.stack.push(Frame { items: lower, min: frame.min, max: midz })
-                        }
-                        return Some(mid)
-                    } else if self.optimise {
-                        if !upper.is_empty() {
-                            let bigmin = self.bbox.bigmin(&midz);
-                            self.stack.push(Frame { items: upper, min: bigmin, max: frame.max })
-                        }
-                        if !lower.is_empty() {
-                            let litmax = self.bbox.litmax(&midz);
-                            self.stack.push(Frame { items: lower, min: frame.min, max: litmax })
-                        }
-                    } else {
-                        if !upper.is_empty() {
-                            self.stack.push(Frame { items: upper, min: midz, max: frame.max })
-                        }
-                        if !lower.is_empty() {
-                            self.stack.push(Frame { items: lower, min: frame.min, max: midz })
-                        }
+                    if !upper.is_empty() {
+                        self.stack.push(Frame { items: upper, min: midz, max: frame.max })
+                    }
+                    if !lower.is_empty() {
+                        self.stack.push(Frame { items: lower, min: frame.min, max: midz })
                     }
                 }
             }

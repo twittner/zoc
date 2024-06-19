@@ -1,6 +1,6 @@
 [package]
 name        = "zoc"
-version     = "0.1.0"
+version     = "0.2.0"
 edition     = "2021"
 license     = "BlueOak-1.0.0"
 description = "Z-order curve based multidimensional range search"
@@ -19,14 +19,14 @@ criterion = "0.5.1"
 rand      = "0.8.5"
 
 [[bench]]
-name = "benchmark"
+name    = "benchmark"
 harness = false
 
 [profile.release]
 codegen-units = 1
-lto = true
+lto           = true
 
 [profile.bench]
 codegen-units = 1
-lto = true
-strip = true
+lto           = true
+strip         = true

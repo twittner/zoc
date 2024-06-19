@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use zoc::{search::range, Bbox, Z};
 
 criterion_group!(benches, benchmark);
@@ -145,8 +145,6 @@ fn benchmark(c: &mut Criterion) {
 
     group.finish();
 
-    let mut group = c.benchmark_group("search");
-
     let mut vec = Vec::new();
     for x in 0 .. 32u32 {
         for y in 0 .. 32u32 {
@@ -155,13 +153,19 @@ fn benchmark(c: &mut Criterion) {
     }
     vec.sort_unstable();
 
-    group.bench_function("([5, 7], [17, 21])", |b| b.iter(|| {
-        black_box(range(vec.as_slice(), [5, 7], [17, 21]).count());
-    }));
+    let mut group = c.benchmark_group("search small");
+    for t in [0, 1, 2, 4, 8, 10, 12, 16, 32, 48] {
+        group.bench_with_input(BenchmarkId::from_parameter(t), &t, |b, &t| b.iter(|| {
+            black_box(range(vec.as_slice(), [5, 7], [17, 21]).optimize_if_gt(t).count());
+        }));
+    }
+    group.finish();
 
-    group.bench_function("([5, 7], [17012, 213413])", |b| b.iter(|| {
-        black_box(range(vec.as_slice(), [5, 7], [17012, 213413]).count());
-    }));
-
+    let mut group = c.benchmark_group("search large");
+    for t in [0, 1, 2, 4, 8, 10, 12, 16, 32, 48] {
+        group.bench_with_input(BenchmarkId::from_parameter(t), &t, |b, &t| b.iter(|| {
+            black_box(range(vec.as_slice(), [5, 7], [17012, 213413]).optimize_if_gt(t).count());
+        }));
+    }
     group.finish();
 }

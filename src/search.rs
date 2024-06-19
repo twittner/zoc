@@ -13,7 +13,7 @@ where
     Zrange {
         stack: vec![Frame { items, min: bbox.min(), max: bbox.max() }],
         bbox,
-        optimise: true
+        threshold: 10
     }
 }
 
@@ -21,20 +21,17 @@ where
 pub struct Zrange<'a, const D: usize, T: Size<D>, A> {
     stack: Vec<Frame<'a, D, T, A>>,
     bbox: Bbox<D, T>,
-    optimise: bool
+    threshold: usize
 }
 
 impl<'a, const D: usize, T: Size<D>, A: GetZ<D, T>> Zrange<'a, D, T, A> {
-    /// Enable litmax/bigmin optimization (default).
-    pub fn optimized(self) -> Self {
-        Self { optimise: true, .. self }
-    }
-
-    /// Disable litmax/bigmin optimization.
+    /// Set litmax/bigmin optimization threshold (default = 10).
     ///
-    /// Reverts to binary search.
-    pub fn unoptimized(self) -> Self {
-        Self { optimise: false, .. self }
+    /// During range search, litmax and bigmin will only be calculated and used
+    /// if the remaining number of elements is larger than the threshold value.
+    pub fn optimize_if_gt(mut self, t: usize) -> Self {
+        self.threshold = t;
+        self
     }
 }
 
@@ -56,35 +53,24 @@ where
             | (lower, [mid, upper @ ..]) => {
                 let midz = *mid.z();
                 if midz < frame.min {
-                    if !upper.is_empty() {
-                        self.stack.push(Frame { items: upper, min: frame.min, max: frame.max })
-                    }
+                    self.stack.push(Frame { items: upper, min: frame.min, max: frame.max })
                 } else if midz > frame.max {
-                    if !lower.is_empty() {
-                        self.stack.push(Frame { items: lower, min: frame.min, max: frame.max })
-                    }
+                    self.stack.push(Frame { items: lower, min: frame.min, max: frame.max })
                 } else if self.bbox.contains(&midz) {
-                    if !upper.is_empty() {
-                        self.stack.push(Frame { items: upper, min: midz, max: frame.max })
-                    }
-                    if !lower.is_empty() {
-                        self.stack.push(Frame { items: lower, min: frame.min, max: midz })
-                    }
+                    self.stack.push(Frame { items: upper, min: midz, max: frame.max });
+                    self.stack.push(Frame { items: lower, min: frame.min, max: midz });
                     return Some(mid)
-                } else if self.optimise {
-                    if !upper.is_empty() {
+                } else {
+                    if upper.len() > self.threshold {
                         let bigmin = self.bbox.bigmin(&midz);
                         self.stack.push(Frame { items: upper, min: bigmin, max: frame.max })
-                    }
-                    if !lower.is_empty() {
-                        let litmax = self.bbox.litmax(&midz);
-                        self.stack.push(Frame { items: lower, min: frame.min, max: litmax })
-                    }
-                } else {
-                    if !upper.is_empty() {
+                    } else {
                         self.stack.push(Frame { items: upper, min: midz, max: frame.max })
                     }
-                    if !lower.is_empty() {
+                    if lower.len() > self.threshold {
+                        let litmax = self.bbox.litmax(&midz);
+                        self.stack.push(Frame { items: lower, min: frame.min, max: litmax })
+                    } else {
                         self.stack.push(Frame { items: lower, min: frame.min, max: midz })
                     }
                 }

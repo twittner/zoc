@@ -41,12 +41,12 @@ impl<const D: usize, T: Size<D>> Bbox<D, T> {
         }
     }
 
-    /// Borrow the bbox minimum z-order curve point.
+    /// Get the bbox minimum z-order curve point.
     pub fn min(&self) -> Z<D, T> {
         self.min
     }
 
-    /// Borrow the bbox maximum z-order curve point.
+    /// Get the bbox maximum z-order curve point.
     pub fn max(&self) -> Z<D, T> {
         self.max
     }

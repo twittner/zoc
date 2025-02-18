@@ -307,7 +307,7 @@ mod tests {
             let mut u = Unstructured::new(&data);
             let n = u.arbitrary().unwrap();
             assert!(prop(n), "{label}");
-            rand::thread_rng().fill_bytes(&mut data)
+            rand::rng().fill_bytes(&mut data)
         }
     }
 

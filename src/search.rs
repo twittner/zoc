@@ -4,7 +4,7 @@ use crate::{Bbox, Size, GetZ, Z};
 ///
 /// Out of a sequence of values that are sorted by their `Z` value, get all
 /// elements within a bounding box.
-pub fn range<const D: usize, T, A>(items: &[A], min: [T; D], max: [T; D]) -> Zrange<D, T, A>
+pub fn range<'a, const D: usize, T, A>(items: &'a [A], min: [T; D], max: [T; D]) -> Zrange<'a, D, T, A>
 where
     T: Size<D>,
     A: GetZ<D, T>
